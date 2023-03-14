@@ -1,0 +1,39 @@
+name: Deployment to the fly.io server pipeline
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize]
+
+jobs:
+  deployment_prep:
+    if: ${{ github.event_name == 'push' && !contains(join(toJson(github.event.commits.*.message), ' '), '#skip') }}
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+      - name: install deps for the server
+        run: npm install
+      - name: install deps for frontend
+        run: cd client && npm install
+      - name: lint
+        run: npm run eslint
+      - name: build
+        run: npm run build:ui
+
+  deploy:
+    name: Deploy phonebook-cicd app
+    needs: [deployment_prep]
+    if: ${{ github.event_name == 'push' && !contains(join(toJson(github.event.commits.*.message), ' '), '#skip') }}
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
